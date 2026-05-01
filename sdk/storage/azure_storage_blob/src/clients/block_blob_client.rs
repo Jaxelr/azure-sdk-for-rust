@@ -24,7 +24,7 @@ use azure_core::{
     tracing, Bytes, Result, Uuid,
 };
 use futures::lock::Mutex;
-use std::{num::NonZero, sync::Arc};
+use std::sync::Arc;
 
 impl BlockBlobClient {
     /// Creates a new BlockBlobClient, using Entra ID authentication.
@@ -125,8 +125,12 @@ impl BlockBlobClient {
         options: Option<BlockBlobClientUploadOptions<'_>>,
     ) -> Result<BlockBlobClientUploadResult> {
         let options = options.unwrap_or_default();
-        let parallel = options.parallel.unwrap_or(DEFAULT_PARALLEL);
-        let partition_size = options.partition_size.unwrap_or(DEFAULT_PARTITION_SIZE);
+        let parallel = options
+            .parallel
+            .unwrap_or_else(crate::partitioned_transfer::defaults::default_concurrency);
+        let partition_size = options
+            .partition_size
+            .unwrap_or(crate::partitioned_transfer::defaults::DEFAULT_UPLOAD_PARTITION_SIZE);
         // Construct exhaustively to catch new options.
         let oneshot_options = BlockBlobClientUploadInternalOptions {
             blob_cache_control: options.blob_cache_control.clone(),
@@ -214,10 +218,6 @@ impl BlockBlobClient {
         })
     }
 }
-
-// unwrap evaluated at compile time
-const DEFAULT_PARALLEL: NonZero<usize> = NonZero::new(4).unwrap();
-const DEFAULT_PARTITION_SIZE: NonZero<u64> = NonZero::new(4 * 1024 * 1024).unwrap();
 
 struct BlockInfo {
     offset: u64,
